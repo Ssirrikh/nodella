@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset = utf-8>
+	<title>Nodella - Node-Based Music Composition</title>
+	<style>
+		* {
+			margin: 0px;
+			padding: 0px;
+			box-sizing: border-box;
+			font-family: 'Calibri';
+		}
+		body {
+			white-space: pre;
+			color: #fefefe;
+			background-color: #222b28;
+			width: 100vw;
+			height: 100vh;
+			overflow: hidden;
+		}
+
+        #canvas-main {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+		.hidden {
+			visibility: hidden;
+		}
+
+		@keyframes fadeIn {
+			0%   { opacity: 0.0; }
+			100% { opacity: 1.0; }
+		}
+		@keyframes fadeOut {
+			0%   { opacity: 1.0; }
+			100% { opacity: 0.0; }
+		}
+	</style>
+</head>
+<body>
+
+<script type="text/javascript" src="script/log.js"></script>
+
+<canvas id='canvas-main'></canvas>
+
+<script type="text/javascript">
+
+	//// SETTINGS AND PRESETS ////
+
+    const COLORS = {
+        dark : {
+            bg : '#222222',
+            grid : '#888888',
+            node : '#eeeeff'
+        }
+    };
+    const GRID_SIZE = 50; // in px
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 2.0;
+    const CROSSHAIR_SIZE = 10; // in px
+
+    let cx0 = window.innerWidth / 2; // in px
+    let cy0 = window.innerHeight / 2; // in px
+    
+    let theme = 'dark';
+    let isFullscreen = false;
+    const CAMERA_PAN_SPEED = 0.1; // in grid units per frame
+    let camera = {
+        x : 3.2,
+        y : 1.7,
+        zoom : 1.0
+    };
+    let cameraMovement = {
+        up : false,
+        down : false,
+        left : false,
+        right : false
+    };
+
+
+
+	//// INIT ////
+
+    let cv = document.getElementById('canvas-main');
+    let ctx = cv.getContext('2d');
+
+
+
+	//// ANIMATION ////
+
+    // function drawNode (x,y) {
+    //     const isVisible = ;
+    // }
+
+	function animate () {
+
+		requestAnimationFrame(animate);
+        const t0_frame = performance.now();
+
+        // update camera
+        if (cameraMovement.up)    camera.y += CAMERA_PAN_SPEED;
+        if (cameraMovement.down)  camera.y -= CAMERA_PAN_SPEED;
+        if (cameraMovement.left)  camera.x -= CAMERA_PAN_SPEED;
+        if (cameraMovement.right) camera.x += CAMERA_PAN_SPEED;
+
+        const camx = cx0 - camera.x*GRID_SIZE;
+        const camy = cy0 + camera.y*GRID_SIZE;
+        const gridoffX = (camera.x % 1) * GRID_SIZE;
+        const gridoffY = (camera.y % 1) * GRID_SIZE;
+
+        // background
+        ctx.fillStyle = COLORS[theme].bg;
+		ctx.fillRect(0,0, cv.width,cv.height);
+
+        // axes
+        ctx.strokeStyle = COLORS[theme].grid;
+        ctx.beginPath();
+        ctx.moveTo(camx,0);
+        ctx.lineTo(camx,cv.height);
+        ctx.moveTo(0,camy);
+        ctx.lineTo(cv.width,camy);
+        ctx.stroke();
+        // grid
+        ctx.strokeStyle = COLORS[theme].grid + '44';
+        ctx.beginPath();
+        for (let dx = 0; dx < cx0+GRID_SIZE; dx += GRID_SIZE) {
+            ctx.moveTo(cx0-gridoffX+dx,0);
+            ctx.lineTo(cx0-gridoffX+dx,cv.height);
+            ctx.moveTo(cx0-gridoffX-dx,0);
+            ctx.lineTo(cx0-gridoffX-dx,cv.height);
+        }
+        for (let dy = 0; dy < cy0+GRID_SIZE; dy += GRID_SIZE) {
+            ctx.moveTo(0,cy0+gridoffY+dy);
+            ctx.lineTo(cv.width,cy0+gridoffY+dy);
+            ctx.moveTo(0,cy0+gridoffY-dy);
+            ctx.lineTo(cv.width,cy0+gridoffY-dy);
+        }
+        ctx.stroke();
+
+        // crosshair
+        ctx.strokeStyle = COLORS[theme].node;
+        ctx.beginPath();
+        ctx.moveTo(cx0+CROSSHAIR_SIZE,cy0);
+        ctx.lineTo(cx0+2*CROSSHAIR_SIZE,cy0);
+        ctx.moveTo(cx0-CROSSHAIR_SIZE,cy0);
+        ctx.lineTo(cx0-2*CROSSHAIR_SIZE,cy0);
+        ctx.moveTo(cx0,cy0+CROSSHAIR_SIZE);
+        ctx.lineTo(cx0,cy0+2*CROSSHAIR_SIZE);
+        ctx.moveTo(cx0,cy0-CROSSHAIR_SIZE);
+        ctx.lineTo(cx0,cy0-2*CROSSHAIR_SIZE);
+        ctx.stroke();
+
+        // console
+        const camStr = [cameraMovement.up?'W':'',cameraMovement.left?'A':'',cameraMovement.down?'S':'',cameraMovement.right?'D':''].join('');
+        log.clear();
+        log.addLine('MSPT: ' + (performance.now()-t0_frame).toFixed(0));
+        // log.addLine((dt_seperate==dt_combined) ? 'equal' : (dt_seperate<dt_combined) ? 'seperate' : 'combined');
+        log.addLine('');
+        log.addLine('[`] to show/hide debug log');
+        log.addLine('[WASD] to move camera');
+        log.addLine('');
+        log.addLine('cam [' + camStr + ']');
+        log.updateElem();
+
+	}
+	animate();
+
+
+    //// UPDATE AND CONTROLS ////
+
+    // resize
+    function onResize () {
+        cv.width = window.innerWidth;
+        cv.height = window.innerHeight;
+        cx0 = window.innerWidth / 2;
+        cy0 = window.innerHeight / 2;
+    }
+    onResize();
+    window.addEventListener('resize', e => {
+        onResize();
+    });
+
+    // mouse
+	// window.addEventListener('mousemove', e => {
+	// 	if (!isShowingControls) toggleControls();
+	// 	lastCursorMove = performance.now();
+	// });
+
+    // keybinds
+	window.addEventListener('keydown', e => {
+		// console.log(e.key);
+		switch (e.key) {
+		// camera controls
+		case 'w': cameraMovement.up = true; break;
+        case 'a': cameraMovement.left = true; break;
+        case 's': cameraMovement.down = true; break;
+        case 'd': cameraMovement.right = true; break;
+		// fullscreen
+		case 'f':
+			(isFullscreen) ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+			isFullscreen = !isFullscreen;
+			break;
+		// debug log/controls
+		case '`':
+            log.elem.style.visibility = (log.elem.style.visibility == 'hidden') ? 'visible' : 'hidden';
+			break;
+        }
+	});
+    window.addEventListener('keyup', e => {
+		console.log(e.key);
+		switch (e.key) {
+		// camera controls
+		case 'w': cameraMovement.up = false; break;
+        case 'a': cameraMovement.left = false; break;
+        case 's': cameraMovement.down = false; break;
+        case 'd': cameraMovement.right = false; break;
+        }
+	});
+
+
+
+</script>
+
+</body>
+</html>
