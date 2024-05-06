@@ -51,27 +51,39 @@
 
 	//// SETTINGS AND PRESETS ////
 
+    // theme presets
     const COLORS = {
         dark : {
-            bg : '#222222',
-            grid : '#888888',
+            bg : '#111111',
+            grid : '#aaaacc',
             node : '#eeeeff'
         }
     };
-    const GRID_SIZE = 50; // in px
-    const ZOOM_MIN = 0.5;
-    const ZOOM_MAX = 2.0;
-    const CROSSHAIR_SIZE = 10; // in px
+    let theme = 'dark';
 
+    // display settings
+    let isFullscreen = false;
     let cx0 = window.innerWidth / 2; // in px
     let cy0 = window.innerHeight / 2; // in px
-    
-    let theme = 'dark';
-    let isFullscreen = false;
+
+    // grid settings
+    const GRID_SIZE = 50; // in px
+    const GRID_DOT_SMALL = 0.7; // in px
+    const GRID_DOT_LARGE = 1.5; // in px
+    const GRID_MODE_DOTS = 0;
+    const GRID_MODE_LINES = 1;
+    const GRID_MODE_DOTLINES = 2;
+    const GRID_MODE_NONE = 3;
+    let gridMode = 0;
+
+    // camera settings
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 2.0;
     const CAMERA_PAN_SPEED = 0.1; // in grid units per frame
+    let cameraNeedsUpdate = true; // force camera update for first frame
     let camera = {
-        x : 3.2,
-        y : 1.7,
+        x : 0.0,
+        y : 0.0,
         zoom : 1.0
     };
     let cameraMovement = {
@@ -81,6 +93,9 @@
         right : false
     };
 
+    // misc
+    const CROSSHAIR_SIZE = 10; // in px
+
 
 
 	//// INIT ////
@@ -88,34 +103,55 @@
     let cv = document.getElementById('canvas-main');
     let ctx = cv.getContext('2d');
 
+    const NODE_EMITTER = 0;
+    const NODE_REPEATER = 1;
+    const NODE_SPLITTER = 2;
+    const NODE_COUNTER = 3;
+    let nodes = [
+        {
+            type : NODE_EMITTER,
+            pos : [1,1],
+            wires : [
+                [1,2]
+            ]
+        }
+    ];
+    // let wires = [
+    //     //
+    // ];
+
 
 
 	//// ANIMATION ////
 
-    // function drawNode (x,y) {
-    //     const isVisible = ;
-    // }
+    function dbg_drawBoundingDots () {
+        const currGridX = Math.floor(camera.x);
+        const currGridY = Math.ceil(camera.y);
+        const dgxMin = -Math.ceil(cv.width/2 / GRID_SIZE) + 1;
+        const dgxMax = Math.ceil(cv.width/2 / GRID_SIZE);
+        const dgyMin = -Math.ceil(cv.height/2 / GRID_SIZE) + 1;
+        const dgyMax = Math.ceil(cv.height/2 / GRID_SIZE) - 1;
+        function drawDotAt (dgx,dgy) {
+            const gx = currGridX + dgx;
+            const gy = currGridY + dgy;
+            const x = cx0-gridoffX+(dgx*GRID_SIZE);
+            const y = cy0+gridoffY-(dgy*GRID_SIZE);
+            const label = '('+gx+','+gy+')';
+            ctx.beginPath();
+            ctx.arc(x,y,GRID_DOT_LARGE,0,2*Math.PI);
+            ctx.fill();
+            ctx.fillText(label,x+4,y-6);
+        }
 
-	function animate () {
+        ctx.fillStyle = '#ff0000';
+        drawDotAt(0,0);
+        drawDotAt(dgxMin,0);
+        drawDotAt(dgxMax-1,0);
+        drawDotAt(0,dgyMin-1);
+        drawDotAt(0,dgyMax);
+    }
 
-		requestAnimationFrame(animate);
-        const t0_frame = performance.now();
-
-        // update camera
-        if (cameraMovement.up)    camera.y += CAMERA_PAN_SPEED;
-        if (cameraMovement.down)  camera.y -= CAMERA_PAN_SPEED;
-        if (cameraMovement.left)  camera.x -= CAMERA_PAN_SPEED;
-        if (cameraMovement.right) camera.x += CAMERA_PAN_SPEED;
-
-        const camx = cx0 - camera.x*GRID_SIZE;
-        const camy = cy0 + camera.y*GRID_SIZE;
-        const gridoffX = (camera.x % 1) * GRID_SIZE;
-        const gridoffY = (camera.y % 1) * GRID_SIZE;
-
-        // background
-        ctx.fillStyle = COLORS[theme].bg;
-		ctx.fillRect(0,0, cv.width,cv.height);
-
+    function drawLineGrid () {
         // axes
         ctx.strokeStyle = COLORS[theme].grid;
         ctx.beginPath();
@@ -140,6 +176,83 @@
             ctx.lineTo(cv.width,cy0+gridoffY-dy);
         }
         ctx.stroke();
+    }
+    function drawDotGrid () {
+        // bounds
+        
+        // grid
+        ctx.fillStyle = COLORS[theme].grid;
+        // DBG: constrict dot grid to bounds
+        // for (let dgx = -3; dgx <= 3; dgx++) {
+        //     for (let dgy = -3; dgy <= 3; dgy++) {
+        for (let dgx = dgxMin; dgx <= dgxMax; dgx++) {
+            for (let dgy = dgyMin; dgy <= dgyMax; dgy++) {
+                // DBG: label every dot with coords
+                // const x = cellX + dgx;
+                // const y = cellY - dgy;
+                // ctx.fillText('('+x+','+y+')',cx0-gridoffX+(dgx*GRID_SIZE),cy0+gridoffY+(dgy*GRID_SIZE)-4);
+                // ctx.fillText('d('+dgx+','+dgy+')',cx0-gridoffX+(dgx*GRID_SIZE),cy0+gridoffY+(dgy*GRID_SIZE)+4);
+                const gx = cellX + dgx;
+                const gy = cellY - dgy;
+                ctx.beginPath();
+                ctx.arc(
+                    cx0-gridoffX+(dgx*GRID_SIZE),
+                    cy0+gridoffY+(dgy*GRID_SIZE),
+                    (gx%4==0 || gy%4==0) ? GRID_DOT_LARGE : GRID_DOT_SMALL,
+                    0, 2*Math.PI
+                );
+                ctx.fill();
+            }
+        }
+    }
+
+    // function drawNode (x,y) {
+    //     const isInFrame = ;
+    // }
+
+
+
+
+    let camx, camy;
+    let cellX, cellY;
+    let gridoffX, gridoffY;
+    let dgxMin, dgxMax;
+    let dgyMin, dgyMax;
+	function animate () {
+
+		requestAnimationFrame(animate);
+        const t0_frame = performance.now();
+
+        // update camera
+        if (cameraMovement.up)    { camera.y += CAMERA_PAN_SPEED; cameraNeedsUpdate = true; }
+        if (cameraMovement.down)  { camera.y -= CAMERA_PAN_SPEED; cameraNeedsUpdate = true; }
+        if (cameraMovement.left)  { camera.x -= CAMERA_PAN_SPEED; cameraNeedsUpdate = true; }
+        if (cameraMovement.right) { camera.x += CAMERA_PAN_SPEED; cameraNeedsUpdate = true; }
+        if (cameraNeedsUpdate) {
+            // position of objects relative to camera, as if camera is (0,0)
+            camx = cx0 - camera.x*GRID_SIZE;
+            camy = cy0 + camera.y*GRID_SIZE;
+            // top-left coordinates of cell that camera is in
+            cellX = Math.floor(camera.x);
+            cellY = Math.ceil(camera.y);
+            // (dx,dy) from camera/center-screen to top-left of cell that camera is in
+            gridoffX = (camera.x < 0)  ? ((camera.x % 1 + 1) * GRID_SIZE) : ((camera.x % 1 + 0) * GRID_SIZE);
+            gridoffY = (camera.y <= 0) ? ((camera.y % 1 + 0) * GRID_SIZE) : ((camera.y % 1 - 1) * GRID_SIZE);
+            // bounds of screen, in delta grid units (rounded up)
+            dgxMin = -Math.ceil(cv.width/2 / GRID_SIZE) + 1; 
+            dgxMax =  Math.ceil(cv.width/2 / GRID_SIZE) + 0;
+            dgyMin = -Math.ceil(cv.height/2 / GRID_SIZE) + 1;
+            dgyMax =  Math.ceil(cv.height/2 / GRID_SIZE) + 0;
+        }
+
+        // background
+        ctx.fillStyle = COLORS[theme].bg;
+		ctx.fillRect(0,0, cv.width,cv.height);
+
+        // grid
+        if (gridMode == GRID_MODE_LINES || gridMode == GRID_MODE_DOTLINES) drawLineGrid();
+        if (gridMode == GRID_MODE_DOTS  || gridMode == GRID_MODE_DOTLINES) drawDotGrid();
+        dbg_drawBoundingDots();
 
         // crosshair
         ctx.strokeStyle = COLORS[theme].node;
@@ -155,15 +268,18 @@
         ctx.stroke();
 
         // console
+        const mspt = (performance.now()-t0_frame).toFixed(0);
         const camStr = [cameraMovement.up?'W':'',cameraMovement.left?'A':'',cameraMovement.down?'S':'',cameraMovement.right?'D':''].join('');
         log.clear();
-        log.addLine('MSPT: ' + (performance.now()-t0_frame).toFixed(0));
-        // log.addLine((dt_seperate==dt_combined) ? 'equal' : (dt_seperate<dt_combined) ? 'seperate' : 'combined');
+        log.addLine('MSPT: ' + mspt);
         log.addLine('');
         log.addLine('[`] to show/hide debug log');
         log.addLine('[WASD] to move camera');
+        log.addLine('[G] to cycle grid mode (dot,line,dotline,none)');
         log.addLine('');
         log.addLine('cam [' + camStr + ']');
+        log.addLine('');
+        log.addLine('curr cell (' + cellX + ',' + cellY + ')');
         log.updateElem();
 
 	}
@@ -172,17 +288,17 @@
 
     //// UPDATE AND CONTROLS ////
 
-    // resize
+    // display
     function onResize () {
         cv.width = window.innerWidth;
         cv.height = window.innerHeight;
         cx0 = window.innerWidth / 2;
         cy0 = window.innerHeight / 2;
     }
-    onResize();
     window.addEventListener('resize', e => {
         onResize();
     });
+    onResize();
 
     // mouse
 	// window.addEventListener('mousemove', e => {
@@ -199,10 +315,20 @@
         case 'a': cameraMovement.left = true; break;
         case 's': cameraMovement.down = true; break;
         case 'd': cameraMovement.right = true; break;
+        // cycle grid mode
+        case 'g':
+            gridMode++;
+            if (gridMode > GRID_MODE_NONE) gridMode = 0;
+            break;
 		// fullscreen
 		case 'f':
-			(isFullscreen) ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-			isFullscreen = !isFullscreen;
+            if (isFullscreen && document.fullscreenElement) {
+                document.exitFullscreen();
+                isFullscreen = false;
+            } else if (!isFullscreen && !document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                isFullscreen = true;
+            }
 			break;
 		// debug log/controls
 		case '`':
