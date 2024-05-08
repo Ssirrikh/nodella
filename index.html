@@ -43,6 +43,7 @@
 </head>
 <body>
 
+<script type="text/javascript" src="script/graph.js"></script>
 <script type="text/javascript" src="script/log.js"></script>
 
 <canvas id='canvas-main'></canvas>
@@ -113,27 +114,29 @@
         {
             type : NODE_EMITTER,
             pos : [1,2],
-            wires : []
+            wires : [[2,2]]
         },
         {
             type : NODE_REPEATER_ALL,
             pos : [2,2],
-            wires : []
+            wires : [[2,3],[2,1]]
         },
         {
             type : NODE_REPEATER_ALL,
             pos : [2,3],
-            wires : []
+            wires : [[3,3]]
         },
         {
             type : NODE_COUNTER,
             pos : [2,1],
-            wires : []
+            wires : [[3,1]]
         }
     ];
     // let wires = [
     //     //
     // ];
+
+    
 
 
 
@@ -223,17 +226,7 @@
 
 
 
-    function drawWire (gx1,gy1,gx2,gy2) {
-        if (!isInFrame(gx1,gy1) && !isInFrame(gx2,gy2)) return;
-        const sx = cx0 + (gx1 - camera.x) * GRID_SIZE;
-        const sy = cy0 - (gy1 - camera.y) * GRID_SIZE;
-        const ex = cx0 + (gx2 - camera.x) * GRID_SIZE;
-        const ey = cy0 - (gy2 - camera.y) * GRID_SIZE;
-        ctx.beginPath();
-        ctx.moveTo(sx,sy);
-        ctx.lineTo(ex,ey);
-        ctx.stroke();
-    }
+    
 
 
 
@@ -362,6 +355,17 @@
             ctx.stroke();
         }
     }
+    function drawWire (gx1,gy1,gx2,gy2) {
+        if (!isInFrame(gx1,gy1) && !isInFrame(gx2,gy2)) return;
+        const sx = cx0 + (gx1 - camera.x) * GRID_SIZE;
+        const sy = cy0 - (gy1 - camera.y) * GRID_SIZE;
+        const ex = cx0 + (gx2 - camera.x) * GRID_SIZE;
+        const ey = cy0 - (gy2 - camera.y) * GRID_SIZE;
+        ctx.beginPath();
+        ctx.moveTo(sx,sy);
+        ctx.lineTo(ex,ey);
+        ctx.stroke();
+    }
 
 
 
@@ -407,7 +411,7 @@
         if (gridMode == GRID_MODE_DOTS  || gridMode == GRID_MODE_DOTLINES) drawDotGrid();
         dbg_drawBoundingDots();
 
-        // nodes
+        // nodes and wires
         ctx.strokeStyle = COLORS[theme].node;
         ctx.fillStyle = COLORS[theme].node;
         // drawNodeRepeater(cx0+GRID_SIZE, cy0-GRID_SIZE);
@@ -422,6 +426,9 @@
         // drawNode(NODE_REPEATER_RANDOM, 5,1);
         for (const node of nodes) {
             drawNode(node.type,...node.pos);
+            for (const wire of node.wires) {
+                drawWire(...node.pos,...wire);
+            }
         }
 
         // crosshair
